@@ -525,7 +525,8 @@ class MovieRepository:
     async def find_popular_by_genre_combination(
         self,
         *,
-        genres: list[str],
+        genres: list[str] | None = None,
+        genre_alias_groups: list[list[str]] | None = None,
         exclude_movie_ids: list[str] | None = None,
         vote_count_min: int = 100,
         limit: int = 20,
@@ -536,13 +537,27 @@ class MovieRepository:
         선호 장르 교집합 섹션 전용 쿼리입니다. 장르 조합을 점차 완화하며 여러 번 호출될 수 있으므로,
         WHERE 절은 장르 교집합과 추천 제외 목록에만 집중하고 정렬은 popularity_score 우선으로 둡니다.
         """
-        normalized_genres = [
-            str(genre).strip()
-            for genre in genres
-            if isinstance(genre, str) and str(genre).strip()
-        ]
-        unique_genres = list(dict.fromkeys(normalized_genres))
-        if not unique_genres:
+        normalized_alias_groups: list[list[str]] = []
+        if genre_alias_groups:
+            for alias_group in genre_alias_groups:
+                unique_aliases = [
+                    str(alias).strip()
+                    for alias in alias_group
+                    if isinstance(alias, str) and str(alias).strip()
+                ]
+                unique_aliases = list(dict.fromkeys(unique_aliases))
+                if unique_aliases:
+                    normalized_alias_groups.append(unique_aliases)
+        elif genres:
+            unique_genres = [
+                str(genre).strip()
+                for genre in genres
+                if isinstance(genre, str) and str(genre).strip()
+            ]
+            unique_genres = list(dict.fromkeys(unique_genres))
+            normalized_alias_groups = [[genre] for genre in unique_genres]
+
+        if not normalized_alias_groups:
             return []
 
         normalized_exclude_ids = [
@@ -562,9 +577,13 @@ class MovieRepository:
             f'%"{EXCLUDED_SEARCH_GENRES[0]}"%',
         ]
 
-        for genre in unique_genres:
-            conditions.append("JSON_CONTAINS(genres, JSON_QUOTE(%s))")
-            params.append(genre)
+        for alias_group in normalized_alias_groups:
+            alias_conditions = [
+                "JSON_CONTAINS(genres, JSON_QUOTE(%s))"
+                for _ in alias_group
+            ]
+            conditions.append(f"({' OR '.join(alias_conditions)})")
+            params.extend(alias_group)
 
         if vote_count_min > 0:
             conditions.append("vote_count >= %s")
