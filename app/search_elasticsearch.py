@@ -8,9 +8,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from dataclasses import dataclass, field
 
 from app.config import get_settings
+from app.genre_discovery_recommendation import (
+    GENRE_DISCOVERY_RECOMMENDATION_ES_SCRIPT_SOURCE,
+    build_genre_discovery_recommendation_params,
+)
 
 try:
     from elasticsearch import AsyncElasticsearch
@@ -501,6 +506,8 @@ class ElasticsearchSearchClient:
                 vote_count_min=vote_count_min,
             )
         )
+        if keyword is None and sort_by == "relevance":
+            query = self._wrap_genre_discovery_recommendation_query(query=query)
         body = {
             "from": (page - 1) * size,
             "size": size,
@@ -515,6 +522,23 @@ class ElasticsearchSearchClient:
         if keyword is not None:
             body["suggest"] = self._build_suggest_body(keyword, capabilities)
         return body
+
+    def _wrap_genre_discovery_recommendation_query(self, *, query: dict) -> dict:
+        return {
+            "function_score": {
+                "query": query,
+                "boost_mode": "replace",
+                "script_score": {
+                    "script": {
+                        "lang": "painless",
+                        "source": GENRE_DISCOVERY_RECOMMENDATION_ES_SCRIPT_SOURCE,
+                        "params": build_genre_discovery_recommendation_params(
+                            current_year=date.today().year,
+                        ),
+                    }
+                },
+            }
+        }
 
     def _build_related_movie_search_body(
         self,
@@ -877,22 +901,60 @@ class ElasticsearchSearchClient:
             genres=genres,
             genre_match_groups=genre_match_groups,
         )
+        filters = self._build_common_filters(
+            genre=None,
+            year_from=year_from,
+            year_to=year_to,
+            rating_min=rating_min,
+            rating_max=rating_max,
+            popularity_min=popularity_min,
+            popularity_max=popularity_max,
+            vote_count_min=vote_count_min,
+        )
+        filters.extend(
+            self._build_required_genre_filters(
+                genres=genres,
+                genre_match_groups=genre_match_groups,
+            )
+        )
         return {
             "bool": {
-                "filter": self._build_common_filters(
-                    genre=None,
-                    year_from=year_from,
-                    year_to=year_to,
-                    rating_min=rating_min,
-                    rating_max=rating_max,
-                    popularity_min=popularity_min,
-                    popularity_max=popularity_max,
-                    vote_count_min=vote_count_min,
-                ),
+                "filter": filters,
                 "should": should_clauses,
                 "minimum_should_match": 1,
             }
         }
+
+    def _build_required_genre_filters(
+        self,
+        *,
+        genres: list[str],
+        genre_match_groups: list[list[str]],
+    ) -> list[dict]:
+        if genre_match_groups:
+            required_filters: list[dict] = []
+            for alias_group in genre_match_groups:
+                unique_aliases = [alias for alias in dict.fromkeys(alias_group) if alias]
+                if not unique_aliases:
+                    continue
+                required_filters.append(
+                    {
+                        "bool": {
+                            "should": [
+                                {"term": {"genres": alias}}
+                                for alias in unique_aliases
+                            ],
+                            "minimum_should_match": 1,
+                        }
+                    }
+                )
+            return required_filters
+
+        return [
+            {"term": {"genres": genre_name}}
+            for genre_name in dict.fromkeys(genres)
+            if genre_name
+        ]
 
     def _build_genre_score_clauses(
         self,

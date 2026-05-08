@@ -27,7 +27,6 @@ from app.model.schema import (
 )
 from app.search_elasticsearch import ESSearchMovieItem, ElasticsearchSearchClient
 from app.search_genre_catalog import (
-    expand_search_genre_aliases,
     get_search_genre_alias_groups,
     normalize_search_genre_labels,
 )
@@ -99,7 +98,6 @@ class SearchService:
         keyword_cleaned = keyword.strip() if keyword and keyword.strip() else None
         selected_genres = normalize_search_genre_labels(genres)
         selected_genre_alias_groups = get_search_genre_alias_groups(selected_genres)
-        expanded_genres = expand_search_genre_aliases(selected_genres)
         is_genre_discovery_search = keyword_cleaned is None and bool(selected_genres)
         search_history_keyword = (
             keyword_cleaned if keyword_cleaned is not None else ",".join(selected_genres)
@@ -147,7 +145,7 @@ class SearchService:
                 keyword=keyword_cleaned,
                 search_type=search_type,
                 genre=genre,
-                genres=expanded_genres if is_genre_discovery_search else None,
+                genres=None,
                 genre_match_groups=selected_genre_alias_groups if is_genre_discovery_search else None,
                 year_from=year_from,
                 year_to=year_to,
