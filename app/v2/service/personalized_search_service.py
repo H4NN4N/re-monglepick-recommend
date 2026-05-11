@@ -845,11 +845,7 @@ class PersonalizedSearchService:
                         keyword=None,
                         search_type="title",
                         genre=None,
-                        genres=[
-                            alias
-                            for alias_group in self._resolve_genre_alias_groups([genre])
-                            for alias in alias_group
-                        ] or [genre],
+                        genres=[genre],
                         genre_match_groups=self._resolve_genre_alias_groups([genre]),
                         year_from=None,
                         year_to=None,
@@ -1065,13 +1061,10 @@ class PersonalizedSearchService:
         exclude_ids: set[str],
     ) -> None:
         """ES 사용 불가 시 기존 MySQL 장르 검색으로 폴백합니다."""
-        expanded_genres = [
-            alias
-            for alias_group in self._resolve_genre_alias_groups([genre])
-            for alias in alias_group
-        ]
+        genre_match_groups = self._resolve_genre_alias_groups([genre])
         movies, _ = await self._movie_repo.search(
-            genres=expanded_genres or [genre],
+            genres=[genre],
+            genre_match_groups=genre_match_groups,
             sort_by="rating",
             sort_order="desc",
             page=1,
