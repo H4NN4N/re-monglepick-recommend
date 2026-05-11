@@ -925,6 +925,34 @@ class ElasticsearchSearchClient:
             }
         }
 
+    def _build_genre_match_filter(self, genre_name: str) -> dict:
+        """genres 필드 매핑 차이를 흡수하기 위한 장르 매칭 필터를 구성합니다."""
+        normalized = genre_name.strip() if isinstance(genre_name, str) else ""
+        if not normalized:
+            return {"match_none": {}}
+
+        should_clauses: list[dict] = [
+            {"term": {"genres": normalized}},
+            {"term": {"genres.keyword": normalized}},
+            {"match_phrase": {"genres": {"query": normalized}}},
+        ]
+
+        lowered = normalized.casefold()
+        if lowered and lowered != normalized:
+            should_clauses.extend(
+                [
+                    {"term": {"genres": lowered}},
+                    {"term": {"genres.keyword": lowered}},
+                ]
+            )
+
+        return {
+            "bool": {
+                "should": should_clauses,
+                "minimum_should_match": 1,
+            }
+        }
+
     def _build_required_genre_filters(
         self,
         *,
@@ -941,7 +969,7 @@ class ElasticsearchSearchClient:
                     {
                         "bool": {
                             "should": [
-                                {"term": {"genres": alias}}
+                                self._build_genre_match_filter(alias)
                                 for alias in unique_aliases
                             ],
                             "minimum_should_match": 1,
@@ -951,7 +979,7 @@ class ElasticsearchSearchClient:
             return required_filters
 
         return [
-            {"term": {"genres": genre_name}}
+            self._build_genre_match_filter(genre_name)
             for genre_name in dict.fromkeys(genres)
             if genre_name
         ]
@@ -975,7 +1003,7 @@ class ElasticsearchSearchClient:
                             "filter": {
                                 "bool": {
                                     "should": [
-                                        {"term": {"genres": alias}}
+                                        self._build_genre_match_filter(alias)
                                         for alias in unique_aliases
                                     ],
                                     "minimum_should_match": 1,
@@ -992,7 +1020,7 @@ class ElasticsearchSearchClient:
         return [
             {
                 "constant_score": {
-                    "filter": {"term": {"genres": genre_name}},
+                    "filter": self._build_genre_match_filter(genre_name),
                     "boost": 1.0,
                 }
             }
@@ -1030,7 +1058,7 @@ class ElasticsearchSearchClient:
         ]
 
         if genre:
-            filters.append({"term": {"genres": genre}})
+            filters.append(self._build_genre_match_filter(genre))
         if year_from is not None:
             filters.append({"range": {"release_year": {"gte": year_from}}})
         if year_to is not None:

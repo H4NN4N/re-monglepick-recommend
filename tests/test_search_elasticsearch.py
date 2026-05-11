@@ -74,9 +74,22 @@ def test_build_genre_discovery_query_requires_all_selected_genre_groups():
     assert len(required_group_filters) == 2
     first_group_terms = required_group_filters[0]["bool"]["should"]
     second_group_terms = required_group_filters[1]["bool"]["should"]
-    assert {"term": {"genres": "액션"}} in first_group_terms
-    assert {"term": {"genres": "액숀"}} in first_group_terms
-    assert second_group_terms == [{"term": {"genres": "드라마"}}]
+    assert client._build_genre_match_filter("액션") in first_group_terms
+    assert client._build_genre_match_filter("액숀") in first_group_terms
+    assert second_group_terms == [client._build_genre_match_filter("드라마")]
+
+
+def test_build_genre_match_filter_supports_sf_text_analysis_variants():
+    client = ElasticsearchSearchClient()
+
+    genre_filter = client._build_genre_match_filter("SF")
+    should_clauses = genre_filter["bool"]["should"]
+
+    assert {"term": {"genres": "SF"}} in should_clauses
+    assert {"term": {"genres.keyword": "SF"}} in should_clauses
+    assert {"match_phrase": {"genres": {"query": "SF"}}} in should_clauses
+    assert {"term": {"genres": "sf"}} in should_clauses
+    assert {"term": {"genres.keyword": "sf"}} in should_clauses
 
 
 def test_build_sort_prioritizes_score_for_genre_discovery_rating():

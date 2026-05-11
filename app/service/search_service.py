@@ -165,11 +165,17 @@ class SearchService:
                 size=size,
             )
             if es_result is not None:
-                es_movies = es_result.movies
-                total = es_result.total
-                did_you_mean = es_result.did_you_mean
-                related_queries = es_result.related_queries
-                search_source = "elasticsearch"
+                if is_genre_discovery_search and es_result.total == 0:
+                    logger.info(
+                        "search_es_genre_discovery_empty_fallback",
+                        extra={"genres": selected_genres},
+                    )
+                else:
+                    es_movies = es_result.movies
+                    total = es_result.total
+                    did_you_mean = es_result.did_you_mean
+                    related_queries = es_result.related_queries
+                    search_source = "elasticsearch"
 
         if es_movies is None:
             movies, total = await self._movie_repo.search(

@@ -40,7 +40,11 @@ SEARCH_GENRE_CATALOG: tuple[SearchGenreCatalogEntry, ...] = (
     SearchGenreCatalogEntry("판타지", ("판타지",), 29680),
     SearchGenreCatalogEntry("모험", ("모험", "어드벤처", "활극"), 27876),
     SearchGenreCatalogEntry("가족", ("가족",), 34461),
-    SearchGenreCatalogEntry("SF", ("SF",), 25766),
+    SearchGenreCatalogEntry(
+        "SF",
+        ("SF", "Sci-Fi", "Sci Fi", "SciFi", "Science Fiction", "Science-Fiction", "공상과학"),
+        25766,
+    ),
     SearchGenreCatalogEntry("아동", ("아동",), 497),
     SearchGenreCatalogEntry("음악", ("음악", "뮤직"), 61683),
     SearchGenreCatalogEntry("군사", ("군사",), 962),
@@ -89,7 +93,7 @@ _PARENTHETICAL_PATTERN = re.compile(r"\s*[\(\（][^)\）]*[\)\）]\s*")
 
 def _normalize_search_genre_lookup_key(value: str) -> str:
     """장르 lookup 키 비교용 문자열을 정규화합니다."""
-    return " ".join(str(value).strip().split())
+    return " ".join(str(value).strip().split()).casefold()
 
 
 def _build_search_genre_lookup_keys(value: str) -> list[str]:
